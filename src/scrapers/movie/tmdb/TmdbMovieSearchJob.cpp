@@ -49,7 +49,7 @@ void TmdbMovieSearchJob::doStart()
         QUrl newUrl(m_api.getMovieSearchUrl(searchStr,
             config().locale,
             config().includeAdult,
-            TmdbApi::UrlParameterMap{{TmdbApi::ApiUrlParameter::INCLUDE_ADULT, includeAdult}}));
+            TmdbApi::UrlParameterMap{}));
         url.swap(newUrl);
         QVector<QRegularExpression> rxYears;
         rxYears << QRegularExpression(R"(^(.*) \((\d{4})\)$)") << QRegularExpression("^(.*) (\\d{4})$")
@@ -65,8 +65,7 @@ void TmdbMovieSearchJob::doStart()
                 QUrl newSearchUrl = m_api.getMovieSearchUrl(searchTitle,
                     config().locale,
                     config().includeAdult,
-                    TmdbApi::UrlParameterMap{{TmdbApi::ApiUrlParameter::INCLUDE_ADULT, includeAdult},
-                        {TmdbApi::ApiUrlParameter::YEAR, searchYear}});
+                    TmdbApi::UrlParameterMap{{TmdbApi::ApiUrlParameter::YEAR, searchYear}});
                 url.swap(newSearchUrl);
                 break;
             }
