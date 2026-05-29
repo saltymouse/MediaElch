@@ -1,6 +1,7 @@
 #include "cli/common.h"
 
 #include <QTextStream>
+#include <ostream>
 
 // levels:
 //   0  only errors
