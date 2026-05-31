@@ -31,6 +31,7 @@ TmdbMovie::TmdbMovie(TmdbMovieConfiguration& settings, QObject* parent) :
         MovieScraperInfo::Countries,
         MovieScraperInfo::Director,
         MovieScraperInfo::Writer,
+        MovieScraperInfo::Tags,
         MovieScraperInfo::Set}
 {
     m_meta.identifier = ID;
@@ -61,6 +62,7 @@ TmdbMovie::TmdbMovie(TmdbMovieConfiguration& settings, QObject* parent) :
         MovieScraperInfo::Countries,
         MovieScraperInfo::Director,
         MovieScraperInfo::Writer,
+        MovieScraperInfo::Tags,
         MovieScraperInfo::Logo,
         MovieScraperInfo::Banner,
         MovieScraperInfo::Thumb,
