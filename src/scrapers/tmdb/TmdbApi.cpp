@@ -147,7 +147,9 @@ QUrl TmdbApi::makeApiUrl(const QString& suffix, const Locale& locale, QUrlQuery 
         query.addQueryItem("region", locale.country());
     }
 
-    return QStringLiteral("https://api.themoviedb.org/3%1?%2").arg(suffix, query.toString());
+    QUrl url(QStringLiteral("https://api.themoviedb.org/3") + suffix);
+    url.setQuery(query);
+    return url;
 }
 
 QUrl TmdbApi::makeImageUrl(const QString& suffix) const
@@ -273,7 +275,7 @@ QUrl TmdbApi::getMovieUrl(QString movieId,
     }();
 
     auto url =
-        QStringLiteral("https://api.themoviedb.org/3/movie/%1%2?").arg(QUrl::toPercentEncoding(movieId), typeStr);
+        QStringLiteral("https://api.themoviedb.org/3/movie/%1%2").arg(QUrl::toPercentEncoding(movieId), typeStr);
     QUrlQuery queries;
     queries.addQueryItem("api_key", TmdbApi::apiKey());
     queries.addQueryItem("language", locale.toString('-'));
@@ -287,19 +289,22 @@ QUrl TmdbApi::getMovieUrl(QString movieId,
         queries.addQueryItem(apiUrlParameterString(key), parameters.value(key));
     }
 
-    return QUrl{url.append(queries.toString())};
+    QUrl builtUrl(url);
+    builtUrl.setQuery(queries);
+    return builtUrl;
 }
 
 /// \brief Get the collection URL for TMDB. Adds the API key.
 QUrl TmdbApi::getCollectionUrl(QString collectionId, const Locale& locale) const
 {
-    auto url = QStringLiteral("https://api.themoviedb.org/3/collection/%1?").arg(collectionId);
+    QUrl builtUrl(QStringLiteral("https://api.themoviedb.org/3/collection/%1").arg(collectionId));
 
     QUrlQuery queries;
     queries.addQueryItem("api_key", TmdbApi::apiKey());
     queries.addQueryItem("language", locale.toString('-'));
 
-    return QUrl{url.append(queries.toString())};
+    builtUrl.setQuery(queries);
+    return builtUrl;
 }
 
 QString TmdbApi::apiKey()
