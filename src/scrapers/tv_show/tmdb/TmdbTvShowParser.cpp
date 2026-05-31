@@ -85,6 +85,15 @@ void TmdbTvShowParser::parseInfos(const QJsonDocument& json, const Locale& local
     }
 
     // -------------------------------------
+    // Add original language as a prefixed tag so Kodi can filter by language.
+    {
+        const QString langCode = data["original_language"].toString();
+        if (!langCode.isEmpty()) {
+            m_show.addTag(tmdbLanguageTag(langCode));
+        }
+    }
+
+    // -------------------------------------
     {
         Poster showPoster;
         if (!data.value("poster_path").toString().isEmpty()) {

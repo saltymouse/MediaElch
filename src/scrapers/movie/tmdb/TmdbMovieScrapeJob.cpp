@@ -176,6 +176,13 @@ void TmdbMovieScrapeJob::parseAndAssignInfos(const QJsonDocument& json)
             m_movie->setOriginalTitle(parsedJson.value("original_title").toString());
         }
     }
+    // Add original language as a prefixed tag so Kodi can filter by language.
+    {
+        const QString langCode = parsedJson.value("original_language").toString();
+        if (!langCode.isEmpty()) {
+            m_movie->addTag(tmdbLanguageTag(langCode));
+        }
+    }
     if (parsedJson.value("belongs_to_collection").isObject()) {
         const auto collection = parsedJson.value("belongs_to_collection").toObject();
         MovieSet set;

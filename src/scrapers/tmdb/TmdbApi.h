@@ -11,6 +11,7 @@
 #include "scrapers/ScraperInfos.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QJsonDocument>
 #include <QNetworkRequest>
 #include <QObject>
@@ -129,6 +130,27 @@ private:
     TmdbApiConfiguration m_config;
     bool m_isInitialized = false;
 };
+
+/// Maps a TMDB ISO-639-1 original_language code to a Kodi tag of the form
+/// "Language: <DisplayName>" so that language tags sort together in the UI.
+inline QString tmdbLanguageTag(const QString& code)
+{
+    // clang-format off
+    static const QHash<QString, QString> s_names = {
+        {"ar", "Arabic"},     {"cs", "Czech"},       {"da", "Danish"},
+        {"de", "German"},     {"el", "Greek"},        {"en", "English"},
+        {"es", "Spanish"},    {"fi", "Finnish"},      {"fr", "French"},
+        {"he", "Hebrew"},     {"hi", "Hindi"},        {"hu", "Hungarian"},
+        {"id", "Indonesian"}, {"it", "Italian"},      {"ja", "Japanese"},
+        {"ko", "Korean"},     {"nb", "Norwegian"},    {"nl", "Dutch"},
+        {"pl", "Polish"},     {"pt", "Portuguese"},   {"ro", "Romanian"},
+        {"ru", "Russian"},    {"sv", "Swedish"},      {"th", "Thai"},
+        {"tr", "Turkish"},    {"uk", "Ukrainian"},    {"vi", "Vietnamese"},
+        {"zh", "Chinese"},
+    };
+    // clang-format on
+    return QStringLiteral("Language: ") + s_names.value(code, code.toUpper());
+}
 
 } // namespace scraper
 } // namespace mediaelch
