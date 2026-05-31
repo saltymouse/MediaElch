@@ -157,6 +157,27 @@ print_info "Running macdeployqt"
 macdeployqt MediaElch.app -verbose=2
 
 #######################################################
+# Strip nanobrew rpaths from the main binary
+#
+# macdeployqt copies Qt frameworks into Contents/Frameworks and patches their
+# internal references, but the main binary still carries rpath entries pointing
+# at the nanobrew prefix. macOS dyld resolves @rpath entries in order and finds
+# the system nanobrew Qt *before* the bundled copy, so both get loaded → Qt
+# initializes twice → fatal crash in init_platform. Removing the nanobrew rpaths
+# forces the binary to resolve exclusively against the bundled frameworks.
+
+print_info "Stripping nanobrew rpaths from main binary"
+BINARY="MediaElch.app/Contents/MacOS/MediaElch"
+while IFS= read -r rpath; do
+    case "$rpath" in
+        /opt/nanobrew/*|"${NB_PREFIX}"*)
+            install_name_tool -delete_rpath "$rpath" "$BINARY"
+            ;;
+    esac
+done < <(otool -l "$BINARY" | awk '/LC_RPATH/{found=1} found && /path /{print $2; found=0}')
+codesign --force --sign - "$BINARY"
+
+#######################################################
 # Create DMG
 
 DMG_NAME="MediaElch_macOS_nanobrew_${ME_VERSION_NAME}.dmg"
