@@ -210,6 +210,7 @@ if(APPLE)
     MACOSX_BUNDLE_BUNDLE_NAME "MediaElch"
     MACOSX_BUNDLE_BUNDLE_VERSION "${mediaelch_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${mediaelch_VERSION}"
+    MACOSX_BUNDLE_ICON_FILE "MediaElch.icns"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/MediaElch.plist"
   )
   target_sources(mediaelch PRIVATE MediaElch.icns)

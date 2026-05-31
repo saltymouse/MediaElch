@@ -21,10 +21,12 @@ add_library(
 
 if(APPLE)
   target_sources(mediaelch_ui PRIVATE MacUiUtilities.mm)
-  set_source_files_properties(
-    MacUiUtilities.mm PROPERTIES COMPILE_OPTIONS
-                                 "-fno-objc-msgsend-selector-stubs"
-  )
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    set_source_files_properties(
+      MacUiUtilities.mm PROPERTIES COMPILE_OPTIONS
+                                   "-fno-objc-msgsend-selector-stubs"
+    )
+  endif()
 endif()
 
 target_link_libraries(
