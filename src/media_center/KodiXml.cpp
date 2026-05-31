@@ -29,10 +29,15 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
 #include <array>
 #include <memory>
+
+#ifdef Q_OS_UNIX
+#    include <unistd.h>
+#endif
 
 KodiXml::KodiXml(mediaelch::KodiSettings& settings, QObject* parent) :
     MediaCenterInterface(parent), m_settings{settings}
@@ -948,6 +953,10 @@ bool KodiXml::saveTvShow(TvShow* show)
             return false;
         }
         file.write(xmlContent);
+        file.flush();
+#ifdef Q_OS_UNIX
+        ::fsync(file.handle());
+#endif
         file.close();
     }
 
@@ -1065,6 +1074,10 @@ bool KodiXml::saveTvShowEpisode(TvShowEpisode* episode)
             return false;
         }
         file.write(xmlContent);
+        file.flush();
+#ifdef Q_OS_UNIX
+        ::fsync(file.handle());
+#endif
         file.close();
     }
 
@@ -1261,12 +1274,23 @@ bool KodiXml::saveFile(QString filename, QByteArray data)
     if (!saveFileDir.exists()) {
         saveFileDir.mkpath(".");
     }
-    QFile file(filename);
-
+    // Use QSaveFile to write atomically (temp file + rename), avoiding a
+    // dirty-mmap conflict on NFS when the file is also open for reading.
+    // setDirectWriteFallback(true) silently falls back on filesystems that
+    // don't support rename (some NFS configs).
+    QSaveFile file(filename);
+    file.setDirectWriteFallback(true);
     if (file.open(QIODevice::WriteOnly)) {
         file.write(data);
-        file.close();
-        return true;
+        file.flush();
+#ifdef Q_OS_UNIX
+        // Force the NFS client to drain dirty pages to the server before we
+        // rename the temp file into place.  Without this, rapid sequential
+        // writes can overflow the server's write buffer, causing macOS's NFS
+        // kext to panic in nfs_vinvalbuf2 with ubc_msync error 22 (EINVAL).
+        ::fsync(file.handle());
+#endif
+        return file.commit();
     }
     return false;
 }
