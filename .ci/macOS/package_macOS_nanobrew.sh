@@ -135,6 +135,13 @@ cd "${BUILD_DIR}"
 
 rm -f ./*.dmg
 
+# Ensure Info.plist is present — incremental cmake rebuilds after a prior
+# macdeployqt run can leave it missing, which breaks the app icon and signing.
+if [[ ! -f MediaElch.app/Contents/Info.plist ]]; then
+    print_info "Info.plist missing from bundle — copying from source"
+    cp "${PROJECT_DIR}/MediaElch.plist" MediaElch.app/Contents/Info.plist
+fi
+
 cp "${THIRD_PARTY_DIR}/ffmpeg" MediaElch.app/Contents/MacOS/
 cp "${THIRD_PARTY_DIR}/libmediainfo.0.dylib" MediaElch.app/Contents/MacOS/
 
