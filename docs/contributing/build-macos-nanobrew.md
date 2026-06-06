@@ -215,6 +215,54 @@ The app bundle is at `build/release/MediaElch.app`.
 
 ---
 
+## Packaging a DMG (nanobrew)
+
+After building, use the dedicated packaging script to produce a redistributable DMG:
+
+```sh
+.ci/macOS/package_macOS_nanobrew.sh
+```
+
+The script:
+1. Verifies `build/release/MediaElch.app` exists.
+2. Downloads `libmediainfo`, `ffmpeg`, and `create-dmg` into `third_party/packaging_macOS_nanobrew/` (cached on subsequent runs).
+3. Runs `macdeployqt` to bundle Qt frameworks into `Contents/Frameworks/`.
+4. **Rewrites absolute library references** in the main binary to bundle-relative
+   `@executable_path/../Frameworks/...` paths (see note below).
+5. Strips any residual nanobrew `LC_RPATH` entries from all bundle binaries.
+6. Re-signs the bundle and creates the DMG with `create-dmg`.
+
+The DMG is placed in the repo root as `MediaElch_macOS_nanobrew_<version>.dmg`.
+
+> **Why the rewrite step?**  
+> nanobrew uses a split-prefix layout: each Qt module lives under its own directory
+> (`/opt/nanobrew/prefix/opt/qtbase/`, `/opt/nanobrew/prefix/opt/qtsvg/`, etc.).
+> `macdeployqt` bundles all frameworks into `Contents/Frameworks/` and patches the
+> bundled plugins (e.g. `libqcocoa.dylib`) to use relative paths, but it does **not**
+> rewrite the main binary's absolute `LC_LOAD_DYLIB` entries because they span multiple
+> prefix directories. Without the rewrite step, macOS loads the nanobrew Qt (via absolute
+> paths in the binary) *and* the bundled Qt (via the patched cocoa plugin) simultaneously,
+> causing a fatal double-Qt crash in `init_platform` at startup.
+
+Pass `--no-confirm` to skip the interactive prompt:
+
+```sh
+.ci/macOS/package_macOS_nanobrew.sh --no-confirm
+```
+
+### Verifying the packaged binary
+
+After packaging, confirm no absolute nanobrew paths remain:
+
+```sh
+# No /opt/nanobrew lines should appear
+otool -L build/release/MediaElch.app/Contents/MacOS/MediaElch | grep nanobrew
+# Should show only @executable_path/../Frameworks and system paths
+otool -L build/release/MediaElch.app/Contents/MacOS/MediaElch | grep -v "System\|usr/lib\|:$"
+```
+
+---
+
 ## Troubleshooting
 
 ### `operator<<[abi:nqe220104]` linker error
@@ -257,3 +305,19 @@ Install libmediainfo: `nb install libmediainfo` (or `brew install libmediainfo`)
 ```sh
 git submodule update --init --recursive
 ```
+
+### App crashes immediately at startup (`init_platform` / double-Qt)
+
+**Symptom**: The app crashes at launch with a crash report showing both
+`/opt/nanobrew/*/Qt*.framework/` and `Contents/Frameworks/Qt*.framework/` loaded
+simultaneously, and the stack ending in `init_platform` → `QMessageLogger::fatal`.
+
+**Cause**: The main binary's `LC_LOAD_DYLIB` entries still point to absolute nanobrew
+paths after `macdeployqt`. At runtime, dyld loads the nanobrew Qt via those absolute
+paths AND loads the bundled Qt via the patched `libqcocoa.dylib` — two Qt instances →
+fatal abort.
+
+**Fix**: Always use the packaging script (`.ci/macOS/package_macOS_nanobrew.sh`) rather
+than running `macdeployqt` manually. The script rewrites all absolute nanobrew paths
+in the main binary to bundle-relative `@executable_path/../Frameworks/...` references
+after `macdeployqt` runs.

@@ -164,25 +164,78 @@ print_info "Running macdeployqt"
 macdeployqt MediaElch.app -verbose=2
 
 #######################################################
-# Strip nanobrew rpaths from the main binary
+# Rewrite hardcoded nanobrew paths in the main binary
 #
-# macdeployqt copies Qt frameworks into Contents/Frameworks and patches their
-# internal references, but the main binary still carries rpath entries pointing
-# at the nanobrew prefix. macOS dyld resolves @rpath entries in order and finds
-# the system nanobrew Qt *before* the bundled copy, so both get loaded → Qt
-# initializes twice → fatal crash in init_platform. Removing the nanobrew rpaths
-# forces the binary to resolve exclusively against the bundled frameworks.
+# With nanobrew's split-prefix Qt layout each Qt module lives under its own
+# prefix (e.g. /opt/nanobrew/prefix/opt/qtbase/, /opt/nanobrew/prefix/opt/qtsvg/).
+# macdeployqt copies all frameworks into Contents/Frameworks and patches the
+# bundled copies and plugins (e.g. libqcocoa.dylib), but it does NOT rewrite the
+# main binary's absolute LC_LOAD_DYLIB entries because they span multiple prefix
+# directories. At runtime dyld loads the nanobrew Qt via those absolute paths AND
+# loads the bundled Qt via libqcocoa.dylib → two Qt instances → fatal crash in
+# init_platform.
+#
+# Fix: rewrite every absolute nanobrew path in the main binary to a bundle-relative
+# @executable_path/../Frameworks reference, then add that directory as an LC_RPATH
+# so @rpath-based dependencies (e.g. libquazip) also resolve from the bundle.
+# Finally strip any remaining nanobrew LC_RPATH entries from all bundle binaries.
 
-print_info "Stripping nanobrew rpaths from main binary"
+print_info "Rewriting nanobrew library references in main binary"
 BINARY="MediaElch.app/Contents/MacOS/MediaElch"
-while IFS= read -r rpath; do
-    case "$rpath" in
-        /opt/nanobrew/*|"${NB_PREFIX}"*)
-            install_name_tool -delete_rpath "$rpath" "$BINARY"
-            ;;
-    esac
-done < <(otool -l "$BINARY" | awk '/LC_RPATH/{found=1} found && /path /{print $2; found=0}')
-codesign --force --sign - "$BINARY"
+FW="@executable_path/../Frameworks"
+
+# Collect every absolute (non-system, non-@) dependency that points into nanobrew
+# or MacPorts and has a matching copy in Contents/Frameworks, then rewrite it.
+while IFS= read -r dep; do
+    basename_dep="$(basename "$dep")"
+    # Skip already-rewritten bundle-relative references
+    [[ "$dep" == @* ]] && continue
+    # Frameworks: rewrite to @executable_path/../Frameworks/<Foo>.framework/Versions/A/<Foo>
+    if [[ "$dep" == *.framework/* ]]; then
+        fw_name="${basename_dep}"
+        bundled_path="${FW}/${fw_name}.framework/Versions/A/${fw_name}"
+        if [[ -f "MediaElch.app/Contents/Frameworks/${fw_name}.framework/Versions/A/${fw_name}" ]]; then
+            print_info "  Rewriting: $dep → $bundled_path"
+            install_name_tool -change "$dep" "$bundled_path" "$BINARY"
+        fi
+    # Flat dylibs: rewrite to @executable_path/../Frameworks/<lib>
+    elif [[ "$dep" == /opt/* || "$dep" == /usr/local/* ]]; then
+        if [[ -f "MediaElch.app/Contents/Frameworks/${basename_dep}" ]]; then
+            print_info "  Rewriting: $dep → ${FW}/${basename_dep}"
+            install_name_tool -change "$dep" "${FW}/${basename_dep}" "$BINARY"
+        fi
+    fi
+done < <(otool -L "$BINARY" | awk 'NR>1{print $1}')
+
+# Add the Frameworks directory as an rpath so @rpath-based deps (e.g. libquazip)
+# also resolve from the bundle.
+if ! otool -l "$BINARY" | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "$FW" "$BINARY"
+fi
+
+# Strip any remaining nanobrew LC_RPATH entries from all bundle binaries so that
+# dyld cannot fall back to loading a second copy of any library from the system.
+strip_nanobrew_rpaths() {
+    local binary="$1"
+    local -a rpaths=()
+    mapfile -t rpaths < <(otool -l "$binary" | awk '/LC_RPATH/{found=1} found && /path /{print $2; found=0}')
+    for rpath in "${rpaths[@]}"; do
+        case "$rpath" in
+            /opt/nanobrew/*|"${NB_PREFIX}"*)
+                print_info "  Removing rpath '$rpath' from $(basename "$binary")"
+                install_name_tool -delete_rpath "$rpath" "$binary"
+                ;;
+        esac
+    done
+}
+
+print_info "Stripping residual nanobrew rpaths from app bundle"
+strip_nanobrew_rpaths "$BINARY"
+while IFS= read -r lib; do
+    strip_nanobrew_rpaths "$lib"
+done < <(find MediaElch.app/Contents/PlugIns MediaElch.app/Contents/Frameworks \
+             -name "*.dylib" -type f 2>/dev/null)
+codesign --force --sign - "MediaElch.app"
 
 #######################################################
 # Create DMG
